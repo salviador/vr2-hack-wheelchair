@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="primaryColor">#4CAF50</color>
+    <color name="primaryDarkColor">#388E3C</color>
+    <color name="accentColor">#FF9800</color>
+    <color name="backgroundColor">#1A1A1A</color>
+    <color name="cardColor">#2D2D2D</color>
+    <color name="textPrimary">#FFFFFF</color>
+    <color name="textSecondary">#AAAAAA</color>
+    <color name="errorColor">#F44336</color>
+    <color name="successColor">#4CAF50</color>
+    <color name="warningColor">#FF9800</color>
+</resources>

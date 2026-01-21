@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    
+    <!-- Background circle -->
+    <path
+        android:fillColor="#4CAF50"
+        android:pathData="M54,54m-50,0a50,50 0,1 1,100 0a50,50 0,1 1,-100 0"/>
+    
+    <!-- Wheelchair icon simplified -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M54,30 C60,30 65,35 65,41 C65,47 60,52 54,52 C48,52 43,47 43,41 C43,35 48,30 54,30 Z"/>
+    
+    <path
+        android:fillColor="#FFFFFF"
+        android:strokeWidth="4"
+        android:strokeColor="#FFFFFF"
+        android:pathData="M42,55 L42,75 Q42,80 47,80 L70,80"/>
+    
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M55,75 m-12,0 a12,12 0,1 1,24 0 a12,12 0,1 1,-24 0"/>
+    
+    <path
+        android:fillColor="#4CAF50"
+        android:pathData="M55,75 m-6,0 a6,6 0,1 1,12 0 a6,6 0,1 1,-12 0"/>
+    
+</vector>
