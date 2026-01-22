@@ -54,15 +54,20 @@ Sistema di controllo alternativo per carrozzine elettriche VR2 PG Drives. Questo
 - Supporto pulsanti fisici (SEC, SWL, SWR)
 
 **Connessioni GPIO:**
-| Funzione | GPIO |
-|----------|------|
-| VR2 TX (UART1) | 17 |
-| VR2 RX (UART1) | 18 |
-| Controllo Relè | 14 |
-| TX Enable    | 11 |
-| Pulsante SEC | 0 |
-| Pulsante SWL | 45 |
-| Pulsante SWR | 35 |
+| Funzione | GPIO | Note |
+|----------|------|------|
+| VR2 TX (UART1) | 17 | |
+| VR2 RX (UART1) | 18 | |
+| Controllo Relè | 14 | |
+| TX Enable | 11 | |
+| sw2dw (Down) | 37 | |
+| sw2up (Up) | 36 | |
+| sw2r (Right) | 35 | |
+| sw2c (Center) | 0 | ⚠️ Strapping pin |
+| swl2 (Left 2) | 45 | ⚠️ Strapping pin |
+| swr (Right) | 48 | |
+| sec (Secondary) | 47 | |
+| swl (Left) | 21 | |
 
 **Build:**
 ```bash
