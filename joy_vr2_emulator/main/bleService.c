@@ -36,6 +36,7 @@
 #include "freertos/event_groups.h"
 #include "freertos/message_buffer.h"
 #include "driver/gpio.h"
+#include "switch.h"
 
 
 //#define FILTER_MAC  1
@@ -304,13 +305,7 @@ bool ble_verify_checksum(const uint8_t *data, size_t len)
  * 5-BUTTON DEBOUNCE SYSTEM
  *============================================================================*/
 
-/* GPIO pins for the 5 telemetry switches */
-#define TELE_SW_SW2C_PIN    GPIO_NUM_0    /* bit 0 = 0x01 */
-#define TELE_SW_SWL2_PIN    GPIO_NUM_45   /* bit 1 = 0x02 */
-#define TELE_SW_SW2R_PIN    GPIO_NUM_35   /* bit 2 = 0x04 */
-#define TELE_SW_SW2DW_PIN   GPIO_NUM_37   /* bit 3 = 0x08 */
-#define TELE_SW_SW2UP_PIN   GPIO_NUM_36   /* bit 4 = 0x10 */
-
+/* GPIO pins for the 5 telemetry switches - using centralized definitions from switch.h */
 #define TELE_SW_NUM_BUTTONS 5
 #define TELE_SW_DEBOUNCE_MS 30  /* Debounce time in ms */
 
@@ -324,11 +319,11 @@ typedef struct {
 } tele_sw_debounce_t;
 
 static tele_sw_debounce_t tele_sw_buttons[TELE_SW_NUM_BUTTONS] = {
-    { TELE_SW_SW2C_PIN,  TELE_SW_SW2C,  false, false, 0 },
-    { TELE_SW_SWL2_PIN,  TELE_SW_SWL2,  false, false, 0 },
-    { TELE_SW_SW2R_PIN,  TELE_SW_SW2R,  false, false, 0 },
-    { TELE_SW_SW2DW_PIN, TELE_SW_SW2DW, false, false, 0 },
-    { TELE_SW_SW2UP_PIN, TELE_SW_SW2UP, false, false, 0 },
+    { SW_SW2C_PIN,  TELE_SW_SW2C,  false, false, 0 },
+    { SW_SWL2_PIN,  TELE_SW_SWL2,  false, false, 0 },
+    { SW_SW2R_PIN,  TELE_SW_SW2R,  false, false, 0 },
+    { SW_SW2DW_PIN, TELE_SW_SW2DW, false, false, 0 },
+    { SW_SW2UP_PIN, TELE_SW_SW2UP, false, false, 0 },
 };
 
 static bool tele_sw_initialized = false;
@@ -344,11 +339,11 @@ static void tele_sw_init(void)
     ESP_LOGW(TAG_BLE, "WARNING: GPIO0 and GPIO45 are strapping pins!");
     
     gpio_config_t io_conf = {
-        .pin_bit_mask = (1ULL << TELE_SW_SW2C_PIN) |
-                        (1ULL << TELE_SW_SWL2_PIN) |
-                        (1ULL << TELE_SW_SW2R_PIN) |
-                        (1ULL << TELE_SW_SW2DW_PIN) |
-                        (1ULL << TELE_SW_SW2UP_PIN),
+        .pin_bit_mask = (1ULL << SW_SW2C_PIN) |
+                        (1ULL << SW_SWL2_PIN) |
+                        (1ULL << SW_SW2R_PIN) |
+                        (1ULL << SW_SW2DW_PIN) |
+                        (1ULL << SW_SW2UP_PIN),
         .mode = GPIO_MODE_INPUT,
         .pull_up_en = GPIO_PULLUP_ENABLE,
         .pull_down_en = GPIO_PULLDOWN_DISABLE,
@@ -370,11 +365,11 @@ static void tele_sw_init(void)
     }
     
     ESP_LOGI(TAG_BLE, "Telemetry switches initialized:");
-    ESP_LOGI(TAG_BLE, "  sw2c  -> GPIO%d (0x01)", TELE_SW_SW2C_PIN);
-    ESP_LOGI(TAG_BLE, "  swl2  -> GPIO%d (0x02)", TELE_SW_SWL2_PIN);
-    ESP_LOGI(TAG_BLE, "  sw2r  -> GPIO%d (0x04)", TELE_SW_SW2R_PIN);
-    ESP_LOGI(TAG_BLE, "  sw2dw -> GPIO%d (0x08)", TELE_SW_SW2DW_PIN);
-    ESP_LOGI(TAG_BLE, "  sw2up -> GPIO%d (0x10)", TELE_SW_SW2UP_PIN);
+    ESP_LOGI(TAG_BLE, "  sw2c  -> GPIO%d (0x01)", SW_SW2C_PIN);
+    ESP_LOGI(TAG_BLE, "  swl2  -> GPIO%d (0x02)", SW_SWL2_PIN);
+    ESP_LOGI(TAG_BLE, "  sw2r  -> GPIO%d (0x04)", SW_SW2R_PIN);
+    ESP_LOGI(TAG_BLE, "  sw2dw -> GPIO%d (0x08)", SW_SW2DW_PIN);
+    ESP_LOGI(TAG_BLE, "  sw2up -> GPIO%d (0x10)", SW_SW2UP_PIN);
     
     tele_sw_initialized = true;
 }
