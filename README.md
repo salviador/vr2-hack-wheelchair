@@ -24,7 +24,7 @@ Sistema di controllo alternativo per carrozzine elettriche VR2 PG Drives. Questo
                 │  - Protocollo VR2     │
                 │  - Controllo relè     │
                 └───────────┬───────────┘
-                            │ UART RS-485 (38400 baud)
+                            │ BUS VR2
                             │
                 ┌───────────▼───────────┐
                 │   VR2 PG Drives ECU   │
@@ -42,7 +42,7 @@ Sistema di controllo alternativo per carrozzine elettriche VR2 PG Drives. Questo
 
 **Hardware:**
 - ESP32 (C3, C6, S2, S3 supportati)
-- Interfaccia RS-485/UART per comunicazione con ECU VR2
+- Interfaccia shields per comunicazione con ECU VR2
 - Relè per controllo alimentazione
 
 **Funzionalità principali:**
@@ -59,7 +59,7 @@ Sistema di controllo alternativo per carrozzine elettriche VR2 PG Drives. Questo
 | VR2 TX (UART1) | 17 |
 | VR2 RX (UART1) | 18 |
 | Controllo Relè | 14 |
-| RS-485 TX Enable | 11 |
+| TX Enable    | 11 |
 | Pulsante SEC | 0 |
 | Pulsante SWL | 45 |
 | Pulsante SWR | 35 |
