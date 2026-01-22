@@ -38,7 +38,7 @@ Sistema di controllo alternativo per carrozzine elettriche VR2 PG Drives. Questo
 
 ### 1. joy_vr2_emulator (ESP32)
 
-**Descrizione:** Firmware ESP32 che funge da bridge BLE tra i controller remoti e la centralina VR2 della carrozzina.
+**Descrizione:** Firmware ESP32 che funge da bridge BLE tra i controller remoti e la centralina della carrozzina, comunicando tramite il protocollo proprietario PG Drives Tech VR2.
 
 **Hardware:**
 - ESP32 (C3, C6, S2, S3 supportati)
