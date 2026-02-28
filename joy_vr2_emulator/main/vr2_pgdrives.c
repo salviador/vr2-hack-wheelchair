@@ -453,7 +453,7 @@ VR2_MasterState vr2_joy_master_run(vr2_command_t cmd)
             // LOG del pacchetto da inviare
             ESP_LOGI(TAG, "TX INIT: %02X %02X %02X %02X %02X %02X",
                     joy_packet.header, joy_packet.buttons, joy_packet.mode,
-                    joy_packet.joy_x, joy_packet.joy_y, joy_packet.checksum);
+                    joy_packet.joy_y, joy_packet.joy_x, joy_packet.checksum);
 
             memcpy(master_tx_buffer, &joy_packet, JOY_PACKET_SIZE);
             
@@ -543,6 +543,7 @@ VR2_MasterState vr2_joy_master_run(vr2_command_t cmd)
             //ESP_LOGI(TAG, "[EMULATOR], VR2_MASTER_RUNNING");
             static int8_t joy_x_hold = 0;
             static int8_t joy_y_hold = 0;
+            static int ecu_error_count = 0;
 
             // aggiorna SOLO se arriva un nuovo comando joystick
             if (cmd.cmd == VR2_CMD_SET_JOY) {
@@ -556,10 +557,8 @@ VR2_MasterState vr2_joy_master_run(vr2_command_t cmd)
             joy_packet.header = JOY_HEADER;  /* 0x4A */
             joy_packet.buttons = JOY_BTN_NONE;  /* 0x00 */
             joy_packet.mode = JOY_MODE_OPERATIVE;  /* 0xA0 */
-            //joy_packet.joy_x = 0x00;
-            //joy_packet.joy_y = 0x00;
 
-            // SEMPRE invia l’ultimo valore (latch)
+            // SEMPRE invia l'ultimo valore (latch)
             joy_packet.joy_x = joy_x_hold;
             joy_packet.joy_y = joy_y_hold;
 
@@ -570,7 +569,7 @@ VR2_MasterState vr2_joy_master_run(vr2_command_t cmd)
 
             switch(cmd.cmd){
                 case VR2_CMD_SHUTDOWN:
-                    joy_packet.buttons = JOY_BTN_SHUTDOWN_START;  
+                    joy_packet.buttons = JOY_BTN_SHUTDOWN_START;
                     vr2_master_state = VR2_MASTER_START_SHUTDOWN;
                 break;
 
@@ -582,12 +581,8 @@ VR2_MasterState vr2_joy_master_run(vr2_command_t cmd)
                     joy_packet.buttons = JOY_BTN_SPEED_MINUS;
                 break;
                 case VR2_CMD_SET_JOY:
-                    //joy_packet.joy_x = (int8_t)cmd.x;
-                    //joy_packet.joy_y = (int8_t)cmd.y;                
                 break;
                 default:
-                    //joy_packet.joy_x = 0x00;
-                    //joy_packet.joy_y = 0x00;
                 break;
             }
             joy_packet.checksum = vr2_calc_checksum_joy(data);
@@ -595,7 +590,6 @@ VR2_MasterState vr2_joy_master_run(vr2_command_t cmd)
             esp_rom_delay_us(INTER_FRAME_DELAY_US);
 
             /* 3) Trasmetti pattern */
-           // Trasmetti
             // TX
             vre_joy_en_tx();
             uart_write_bytes(VR2_UART_NUM, (char*)master_tx_buffer, JOY_PACKET_SIZE);
@@ -605,80 +599,78 @@ VR2_MasterState vr2_joy_master_run(vr2_command_t cmd)
 
 
             /* 5) Leggi i dati ricevuti */
-            rx_len = uart_read_bytes(VR2_UART_NUM, 
-                                        master_rx_buffer, 
+            rx_len = uart_read_bytes(VR2_UART_NUM,
+                                        master_rx_buffer,
                                         (JOY_PACKET_SIZE + ECU_PACKET_SIZE),
                                         pdMS_TO_TICKS(10));
-            
-            // Verifica lunghezza
-            if (rx_len < (JOY_PACKET_SIZE + ECU_PACKET_SIZE)) {
-                ESP_LOGW(TAG, "ECU ERROR: Received only %d bytes, expected %d", 
-                        rx_len, ECU_PACKET_SIZE);
-                vr2_joy_master_init();
-                vTaskDelay(pdMS_TO_TICKS(1000));
+
+            // Cerca il pacchetto ECU (header 0xFE 0x54) nei dati ricevuti
+            uint8_t ecu_found = 0;
+            if (rx_len >= ECU_PACKET_SIZE) {
+                for (int i = 0; i <= rx_len - ECU_PACKET_SIZE; i++) {
+                    if (master_rx_buffer[i] == ECU_HEADER1 && master_rx_buffer[i+1] == ECU_HEADER2) {
+                        if (vr2_parse_ecu_packet(&master_rx_buffer[i], &ecu_packet)) {
+                            ecu_found = 1;
+                            break;
+                        }
+                    }
+                }
+            }
+
+            if (!ecu_found) {
+                ecu_error_count++;
+                ESP_LOGW(TAG, "ECU ERROR: rx_len=%d, no valid ECU packet found (err %d/%d)",
+                        rx_len, ecu_error_count, VR2_MAX_ECU_ERRORS);
+                if (ecu_error_count >= VR2_MAX_ECU_ERRORS) {
+                    ESP_LOGE(TAG, "ECU ERROR: %d consecutive errors, restarting", ecu_error_count);
+                    ecu_error_count = 0;
+                    vr2_joy_master_init();
+                    vTaskDelay(pdMS_TO_TICKS(1000));
+                }
                 break;
             }
 
-            if (vr2_parse_ecu_packet(&master_rx_buffer[JOY_PACKET_SIZE], &ecu_packet)) {  //Verifica cheksum
+            // Pacchetto ECU valido, reset contatore errori
+            ecu_error_count = 0;
 
-
-                /* Check if ECU is still in init mode */
-                
-                switch(ecu_packet.status1){
-                    case ECU_STATUS1_INIT:
-
-                        //INIT o ERROR ?????????????
-                        if(ecu_packet.battery == 0x01){
-                            //INIT
-                        }else{
-                            //ERROR
-                            ecustate.battery = ecu_packet.battery;
-                            ecustate.speed = ecu_packet.speed_cmd;
-                            ecustate.state = VR2_ECU_ERROR;
-                            vr2_post_state(ecustate);
-
-                            ESP_LOGW(TAG, "ECU INIT ERROR!!! ...");                        
-                            vr2_joy_master_init();  // Restart totale
-                            vTaskDelay(pdMS_TO_TICKS(1000));
-                        }
-                    break;
-                    case ECU_STATUS1_NORMAL:
+            /* Check ECU status */
+            switch(ecu_packet.status1){
+                case ECU_STATUS1_INIT:
+                    if(ecu_packet.battery == 0x01){
+                        //INIT
+                    }else{
+                        //ERROR
                         ecustate.battery = ecu_packet.battery;
                         ecustate.speed = ecu_packet.speed_cmd;
-                        ecustate.state = VR2_ECU_RUN;
+                        ecustate.state = VR2_ECU_ERROR;
                         vr2_post_state(ecustate);
-                    break;
-                    case ECU_STATUS1_OFF:
 
-                    break;
-                    default:
-                        ESP_LOGW(TAG, "ECU INIT ERROR!!! ...");                        
-                        vr2_joy_master_init();  // Restart totale
+                        ESP_LOGW(TAG, "ECU STATUS ERROR: status1=INIT, battery=0x%02X", ecu_packet.battery);
+                        vr2_joy_master_init();
                         vTaskDelay(pdMS_TO_TICKS(1000));
-                    break;
-                }
-                switch(ecu_packet.status2){
-                    //ACK REQUEST
-                    case JOY_MODE_ACK:
-
-                    break;
-                    case ECU_STATUS2_NACK:
-
-                    break;
-                    default:
-                    break;
-                }
-                //vTaskDelay(pdMS_TO_TICKS(3));                    
-            }else {
-                /* Invalid packet, retry */
-                ecustate.battery = ecu_packet.battery;
-                ecustate.speed = ecu_packet.speed_cmd;
-                ecustate.state = VR2_ECU_ERROR;
-                vr2_post_state(ecustate);
-
-                ESP_LOGW(TAG, "ECU INIT ERROR!!! ...");
-                vr2_joy_master_init();
-                vTaskDelay(pdMS_TO_TICKS(1000));
+                    }
+                break;
+                case ECU_STATUS1_NORMAL:
+                    ecustate.battery = ecu_packet.battery;
+                    ecustate.speed = ecu_packet.speed_cmd;
+                    ecustate.state = VR2_ECU_RUN;
+                    vr2_post_state(ecustate);
+                break;
+                case ECU_STATUS1_OFF:
+                break;
+                default:
+                    ESP_LOGW(TAG, "ECU STATUS ERROR: unexpected status1=0x%02X", ecu_packet.status1);
+                    vr2_joy_master_init();
+                    vTaskDelay(pdMS_TO_TICKS(1000));
+                break;
+            }
+            switch(ecu_packet.status2){
+                case JOY_MODE_ACK:
+                break;
+                case ECU_STATUS2_NACK:
+                break;
+                default:
+                break;
             }
         }
         break;

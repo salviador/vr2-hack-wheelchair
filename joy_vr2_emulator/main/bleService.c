@@ -16,6 +16,8 @@
  *   
  * CHARACTERISTIC TELEMETRIA - Server notifies ECU state:
  *   Format: [state:uint8] [speed:uint8] [battery:uint8] [switches:uint8] [checksum:uint8]
+ *   
+ * PIN=847293
  */
 
 #include "freertos/FreeRTOS.h"
@@ -36,12 +38,11 @@
 #include "freertos/event_groups.h"
 #include "freertos/message_buffer.h"
 #include "driver/gpio.h"
-#include "switch.h"
 
 
 //#define FILTER_MAC  1
 //#define MULTICONNECTION
-//#define BLEPASSORD
+#define BLEPASSORD
 #define EXTENDED_ADVERSING_5
 
 /* BLE Command Types from client */
@@ -73,6 +74,12 @@ static struct _clientsConnection clientsConnection;
 /* BLECONNECTED_BIT and BLECONNECTED_BIT_JOYSTICK are defined in bleService.h */
 
 const uint8_t MAC_REMOTO_JOYSTICK[6] =   {  0x02, 0x80, 0xe1, 0x00, 0x00, 0xe0 };
+
+#ifdef BLEPASSORD
+/* Salva i dati del device in attesa di autenticazione (usato nel fix NULL-ptr) */
+static uint16_t s_pending_conn_id = 0xFF;
+static esp_gatt_if_t s_pending_gatts_if = ESP_GATT_IF_NONE;
+#endif
 
 #define GATTS_TABLE_TAG "SEC_GATTS_DEMO"
 
@@ -305,7 +312,13 @@ bool ble_verify_checksum(const uint8_t *data, size_t len)
  * 5-BUTTON DEBOUNCE SYSTEM
  *============================================================================*/
 
-/* GPIO pins for the 5 telemetry switches - using centralized definitions from switch.h */
+/* GPIO pins for the 5 telemetry switches */
+#define TELE_SW_SW2C_PIN    GPIO_NUM_0    /* bit 0 = 0x01 */
+#define TELE_SW_SWL2_PIN    GPIO_NUM_45   /* bit 1 = 0x02 */
+#define TELE_SW_SW2R_PIN    GPIO_NUM_35   /* bit 2 = 0x04 */
+#define TELE_SW_SW2DW_PIN   GPIO_NUM_37   /* bit 3 = 0x08 */
+#define TELE_SW_SW2UP_PIN   GPIO_NUM_36   /* bit 4 = 0x10 */
+
 #define TELE_SW_NUM_BUTTONS 5
 #define TELE_SW_DEBOUNCE_MS 30  /* Debounce time in ms */
 
@@ -319,11 +332,11 @@ typedef struct {
 } tele_sw_debounce_t;
 
 static tele_sw_debounce_t tele_sw_buttons[TELE_SW_NUM_BUTTONS] = {
-    { SW_SW2C_PIN,  TELE_SW_SW2C,  false, false, 0 },
-    { SW_SWL2_PIN,  TELE_SW_SWL2,  false, false, 0 },
-    { SW_SW2R_PIN,  TELE_SW_SW2R,  false, false, 0 },
-    { SW_SW2DW_PIN, TELE_SW_SW2DW, false, false, 0 },
-    { SW_SW2UP_PIN, TELE_SW_SW2UP, false, false, 0 },
+    { TELE_SW_SW2C_PIN,  TELE_SW_SW2C,  false, false, 0 },
+    { TELE_SW_SWL2_PIN,  TELE_SW_SWL2,  false, false, 0 },
+    { TELE_SW_SW2R_PIN,  TELE_SW_SW2R,  false, false, 0 },
+    { TELE_SW_SW2DW_PIN, TELE_SW_SW2DW, false, false, 0 },
+    { TELE_SW_SW2UP_PIN, TELE_SW_SW2UP, false, false, 0 },
 };
 
 static bool tele_sw_initialized = false;
@@ -339,11 +352,11 @@ static void tele_sw_init(void)
     ESP_LOGW(TAG_BLE, "WARNING: GPIO0 and GPIO45 are strapping pins!");
     
     gpio_config_t io_conf = {
-        .pin_bit_mask = (1ULL << SW_SW2C_PIN) |
-                        (1ULL << SW_SWL2_PIN) |
-                        (1ULL << SW_SW2R_PIN) |
-                        (1ULL << SW_SW2DW_PIN) |
-                        (1ULL << SW_SW2UP_PIN),
+        .pin_bit_mask = (1ULL << TELE_SW_SW2C_PIN) |
+                        (1ULL << TELE_SW_SWL2_PIN) |
+                        (1ULL << TELE_SW_SW2R_PIN) |
+                        (1ULL << TELE_SW_SW2DW_PIN) |
+                        (1ULL << TELE_SW_SW2UP_PIN),
         .mode = GPIO_MODE_INPUT,
         .pull_up_en = GPIO_PULLUP_ENABLE,
         .pull_down_en = GPIO_PULLDOWN_DISABLE,
@@ -365,11 +378,11 @@ static void tele_sw_init(void)
     }
     
     ESP_LOGI(TAG_BLE, "Telemetry switches initialized:");
-    ESP_LOGI(TAG_BLE, "  sw2c  -> GPIO%d (0x01)", SW_SW2C_PIN);
-    ESP_LOGI(TAG_BLE, "  swl2  -> GPIO%d (0x02)", SW_SWL2_PIN);
-    ESP_LOGI(TAG_BLE, "  sw2r  -> GPIO%d (0x04)", SW_SW2R_PIN);
-    ESP_LOGI(TAG_BLE, "  sw2dw -> GPIO%d (0x08)", SW_SW2DW_PIN);
-    ESP_LOGI(TAG_BLE, "  sw2up -> GPIO%d (0x10)", SW_SW2UP_PIN);
+    ESP_LOGI(TAG_BLE, "  sw2c  -> GPIO%d (0x01)", TELE_SW_SW2C_PIN);
+    ESP_LOGI(TAG_BLE, "  swl2  -> GPIO%d (0x02)", TELE_SW_SWL2_PIN);
+    ESP_LOGI(TAG_BLE, "  sw2r  -> GPIO%d (0x04)", TELE_SW_SW2R_PIN);
+    ESP_LOGI(TAG_BLE, "  sw2dw -> GPIO%d (0x08)", TELE_SW_SW2DW_PIN);
+    ESP_LOGI(TAG_BLE, "  sw2up -> GPIO%d (0x10)", TELE_SW_SW2UP_PIN);
     
     tele_sw_initialized = true;
 }
@@ -772,11 +785,35 @@ static void gap_event_handler(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param
         ESP_LOGI(GATTS_TABLE_TAG, "address type = %d", param->ble_security.auth_cmpl.addr_type);
         ESP_LOGI(GATTS_TABLE_TAG, "pair status = %s", param->ble_security.auth_cmpl.success ? "success" : "fail");
         if (!param->ble_security.auth_cmpl.success) {
-            ESP_LOGI(GATTS_TABLE_TAG, "fail reason = 0x%x", param->ble_security.auth_cmpl.fail_reason);
+            ESP_LOGE(GATTS_TABLE_TAG, "Autenticazione FALLITA, reason = 0x%x - disconnessione forzata",
+                     param->ble_security.auth_cmpl.fail_reason);
+#ifdef BLEPASSORD
+            /* Disconnetti chi ha fallito il PIN */
+            if (s_pending_conn_id != 0xFF) {
+                esp_ble_gatts_close(s_pending_gatts_if, s_pending_conn_id);
+                s_pending_conn_id  = 0xFF;
+                s_pending_gatts_if = ESP_GATT_IF_NONE;
+            }
+#endif
         } else {
             ESP_LOGI(GATTS_TABLE_TAG, "auth mode = %s", esp_auth_req_to_str(param->ble_security.auth_cmpl.auth_mode));
 #ifdef BLEPASSORD
-            connected(Joystick_profile_tab[JOYSTICK_PROFILE_APP_IDX].gatts_if, NULL);
+            /* Fix: usa i dati salvati al CONNECT_EVT invece di param NULL */
+            if (clientsConnection.numero_connessioni < 1 && s_pending_conn_id != 0xFF) {
+                clientsConnection.joy_en     = 1;
+                clientsConnection.joy_connid = s_pending_conn_id;
+                clientsConnection.login_connid = s_pending_conn_id;
+                xEventGroupSetBits(BLE_event_group, BLECONNECTED_BIT_JOYSTICK | BLECONNECTED_BIT);
+                clientsConnection.numero_connessioni++;
+                ESP_LOGI(GATTS_TABLE_TAG, "CLIENT AUTENTICATO E CONNESSO (conn_id=%d)", s_pending_conn_id);
+                s_pending_conn_id  = 0xFF;
+                s_pending_gatts_if = ESP_GATT_IF_NONE;
+            } else {
+                /* Seconda connessione non consentita */
+                esp_ble_gatts_close(s_pending_gatts_if, s_pending_conn_id);
+                s_pending_conn_id  = 0xFF;
+                s_pending_gatts_if = ESP_GATT_IF_NONE;
+            }
 #endif
         }
         show_bonded_devices();
@@ -886,9 +923,13 @@ static void gatts_profile_event_handler(esp_gatts_cb_event_t event,
 
         case ESP_GATTS_CONNECT_EVT:
 #ifdef BLEPASSORD
+            /* Salva conn_id e gatts_if per usarli dopo l'autenticazione */
             clientsConnection.login_connid = param->connect.conn_id;
-            ESP_LOGI(GATTS_TABLE_TAG, "ESP_GATTS_CONNECT_EVT ID %d", param->connect.conn_id);
-            esp_ble_set_encryption(param->connect.remote_bda, ESP_BLE_SEC_ENCRYPT_NO_MITM);
+            s_pending_conn_id   = param->connect.conn_id;
+            s_pending_gatts_if  = gatts_if;
+            ESP_LOGI(GATTS_TABLE_TAG, "ESP_GATTS_CONNECT_EVT ID %d - in attesa di autenticazione", param->connect.conn_id);
+            /* ENCRYPT_MITM richiede MITM protection (coerente con SC_MITM_BOND) */
+            esp_ble_set_encryption(param->connect.remote_bda, ESP_BLE_SEC_ENCRYPT_MITM);
 #else
             connected(gatts_if, param);
 #endif
@@ -1024,6 +1065,13 @@ void disconnected(esp_ble_gatts_cb_param_t *param)
         xEventGroupClearBits(BLE_event_group, BLECONNECTED_BIT);
     }
 
+    /* SAFETY: BLE client disconnected → shutdown the ECU immediately.
+     * Without this, joy_x_hold/joy_y_hold in VR2_MASTER_RUNNING keep the
+     * last joystick value latched and the wheelchair would continue moving. */
+    vr2_command_t safety_cmd = { .cmd = VR2_CMD_SHUTDOWN, .x = 0, .y = 0, .buttons = 0 };
+    vr2_post_command(safety_cmd);
+    ESP_LOGW(GATTS_TABLE_TAG, "Safety shutdown sent on BLE disconnect");
+
 #ifdef EXTENDED_ADVERSING_5
     esp_ble_gap_ext_adv_start(NUM_EXT_ADV_SET, &ext_adv[0]);
 #else
@@ -1136,12 +1184,14 @@ void BLE_Service_Start(void)
     }
 
 #ifdef BLEPASSORD
-    esp_ble_auth_req_t auth_req = ESP_LE_AUTH_REQ_SC_ONLY;
+    /* SC_MITM_BOND: Secure Connections + MITM protection + bonding (auto-reconnect) */
+    esp_ble_auth_req_t auth_req = ESP_LE_AUTH_REQ_SC_MITM_BOND;
+    /* IO_CAP_OUT: ESP32 "mostra" il passkey (via log seriale), il client lo digita */
     esp_ble_io_cap_t iocap = ESP_IO_CAP_OUT;
     uint8_t key_size = 16;
     uint8_t init_key = ESP_BLE_ENC_KEY_MASK | ESP_BLE_ID_KEY_MASK;
     uint8_t rsp_key = ESP_BLE_ENC_KEY_MASK | ESP_BLE_ID_KEY_MASK;
-    uint32_t passkey = 123456;
+    uint32_t passkey = 847293;   /* Cambia con un tuo PIN a 6 cifre (0-999999) */
     uint8_t auth_option = ESP_BLE_ONLY_ACCEPT_SPECIFIED_AUTH_ENABLE;
     uint8_t oob_support = ESP_BLE_OOB_DISABLE;
 

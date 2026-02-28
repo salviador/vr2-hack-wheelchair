@@ -16,5 +16,6 @@
     "--query-driver=**",
     "--compile-commands-dir=d:\\Progetti\\ESP32S3\\joy_vr2_emulator\\build"
   ],
-  "idf.flashType": "UART"
+  "idf.flashType": "UART",
+  "idf.currentSetup": "C:\\Users\\michele\\esp\\v5.5.2\\esp-idf"
 }

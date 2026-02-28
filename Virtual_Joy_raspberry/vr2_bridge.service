@@ -1,0 +1,25 @@
+[Unit]
+Description=VR2 Wheelchair BLE-MQTT Bridge
+After=network.target bluetooth.target mosquitto.service
+Wants=bluetooth.target
+
+[Service]
+Type=simple
+User=pi
+Group=pi
+WorkingDirectory=/home/pi/vr2_bridge
+ExecStart=/home/pi/vr2_bridge/venv/bin/python vr2_bridge.py
+Restart=always
+RestartSec=5
+
+# Allow D-Bus access for BlueZ pairing agent
+Environment=DBUS_SESSION_BUS_ADDRESS=
+# Give access to system bus for BlueZ
+SupplementaryGroups=bluetooth
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=vr2_bridge
+
+[Install]
+WantedBy=multi-user.target

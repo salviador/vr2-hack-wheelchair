@@ -60,8 +60,8 @@ typedef struct __attribute__((packed)) {
     uint8_t header;     /* Always 0x4A */
     uint8_t buttons;    /* Button flags */
     uint8_t mode;       /* Operating mode */
-    uint8_t joy_x;      /* X axis value */
-    uint8_t joy_y;      /* Y axis value */
+    uint8_t joy_y;      /* Y axis value (forward/back) */
+    uint8_t joy_x;      /* X axis value (left/right) */
     uint8_t checksum;   /* (sum bytes 0-4) XOR 0xFF */
 } JOY_Packet_t;
 typedef struct __attribute__((packed)) {
@@ -231,6 +231,9 @@ uint8_t vr2_parse_ecu_packet(const uint8_t *buffer, ECU_Packet_t *packet);
 #define INTER_FRAME_DELAY_US    350
 #define STARTUP_PULSE_MS        108
 #define FRAME_INTERVAL_MS       6  /* ~5.8ms between frames */
+
+/* Error tolerance: consecutive ECU errors before full restart */
+#define VR2_MAX_ECU_ERRORS      5
 void vr2_emulator_start(void);
 esp_err_t vr2_post_command(vr2_command_t cmd);
 
